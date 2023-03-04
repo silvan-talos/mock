@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/urfave/cli/v2"
+
+	"github.com/silvan-talos/mock/mocking"
 )
 
 var (
@@ -47,6 +49,12 @@ func startMocker(cCtx *cli.Context) error {
 	interfaces := cCtx.StringSlice("interface")
 	if filePath == "" && interfaces == nil {
 		return ErrArgs
+	}
+
+	mocker := mocking.NewService()
+	err := mocker.Process(interfaces, filePath)
+	if err != nil {
+		return err
 	}
 
 	return nil

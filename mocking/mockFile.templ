@@ -1,0 +1,24 @@
+{{/* template for the struct definition */}}
+{{define "struct"}}
+type {{.Name}} struct {
+{{range .Methods}}
+	{{- .Name}}Fn    func({{.Args}}) {{.RetArgs}}
+{{end}}
+}
+{{end}}
+
+{{/* template for function implementations */}}
+{{define "functions"}}{{$struct := .}}{{range .Methods}}
+func ({{$struct.NameAbbrev}} *{{$struct.Name}}) {{.Name}} ({{.Args}}) {{.RetArgs}}{
+	if {{$struct.NameAbbrev}}.{{.Name}}Fn != nil {
+		return {{$struct.NameAbbrev}}.{{.Name}}Fn({{argNames .}})
+	}
+}
+{{end}}{{end}}
+
+{{/* mock file definition */}}
+package mock
+
+{{template "struct" .}}
+
+{{template "functions" .}}
