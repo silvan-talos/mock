@@ -25,12 +25,51 @@ type mocker struct {
 
 func NewMocker() Mocker {
 	funcMap := template.FuncMap{
-		"argNames":  ArgNames,
-		"retValues": ReturnValues,
+		"argNames":  argNames,
+		"retValues": returnValues,
 	}
 	return &mocker{
 		templ: template.Must(template.New("mockFile").Funcs(funcMap).Parse(mockFileTemplate)),
 	}
+}
+func argNames(f mock.Func) string {
+	names := make([]string, 0)
+	for _, rawArg := range strings.Split(f.Args, ", ") {
+		argName := strings.Split(rawArg, " ")[0]
+		names = append(names, argName)
+	}
+	return strings.Join(names, ", ")
+}
+
+func returnValues(f mock.Func) string {
+	ret := make([]string, 0)
+	for _, arg := range strings.Split(f.RetArgs, ", ") {
+		retType := strings.Trim(arg, "())")
+		var val string
+		switch retType {
+		case "error":
+			val = "nil"
+		case "int", "uint", "int16", "int32", "int64", "uint16", "uint32", "uint64":
+			val = "1"
+		case "float32", "float64":
+			val = "1.1"
+		case "string", "interface{}":
+			val = "\"\""
+		default:
+			val = retType + "{}"
+		}
+		switch {
+		case strings.Contains(retType, "[]"):
+			val = fmt.Sprintf("%s{}", retType)
+		case strings.Contains(retType, "*"):
+			val = strings.Replace(retType, "*", "&", 1)
+			if abbrev(val) != "" {
+				val += "{}"
+			}
+		}
+		ret = append(ret, val)
+	}
+	return strings.Join(ret, ", ")
 }
 
 func (m *mocker) Mock(input string, out io.Writer, intf string) error {
@@ -60,8 +99,6 @@ func (m *mocker) Mock(input string, out io.Writer, intf string) error {
 			RetArgs: cleanupNames(matches[3]),
 		}
 		mockStruct.Methods = append(mockStruct.Methods, fn)
-
-		log.Println("Name:", matches[1], "ARGS:", matches[2], "rets:", matches[3])
 	}
 	var buf bytes.Buffer
 	err := m.templ.Execute(&buf, mockStruct)
@@ -80,7 +117,7 @@ func (m *mocker) Mock(input string, out io.Writer, intf string) error {
 		log.Println("failed to write output:", err)
 		return err
 	}
-
+	log.Printf("interface %s successfully mocked\n", intf)
 	return nil
 }
 
