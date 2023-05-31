@@ -13,6 +13,7 @@ func ({{$struct.NameAbbrev}} *{{$struct.Name}}) {{.Name}} ({{.Args}}) {{.RetArgs
 	if {{$struct.NameAbbrev}}.{{.Name}}Fn != nil {
 		return {{$struct.NameAbbrev}}.{{.Name}}Fn({{argNames .}})
 	}
+	return {{retValues .}}
 }
 {{end}}{{end}}
 

@@ -1,9 +1,9 @@
 package mocking
 
 import (
-	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -19,26 +19,28 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("no match between interface name and filepath found. Please add one manually")
+	ErrNotFound             = errors.New("no match between interface name and filepath found. Please add one manually")
+	ErrMoreThanOneInterface = errors.New("more than one interface found, only one at a time is supported")
 )
-
-type Mocker interface {
-	Mock(interfaceName, filePath string) error
-}
 
 type Service interface {
 	Process(interfaces []string, filePath string) error
+	ProcessOne(input io.Reader, output io.Writer) error
+}
+
+type Mocker interface {
+	Mock(in string, out io.Writer, intf string) error
 }
 
 type service struct {
+	mocker Mocker
 }
 
-func NewService() Service {
-	return &service{}
+func NewService(m Mocker) Service {
+	return &service{
+		mocker: m,
+	}
 }
-
-//go:embed mockFile.templ
-var mockFileTemplate string
 
 func (s *service) Process(interfaces []string, filePath string) error {
 	pairs := make(map[string]string, 0)
@@ -70,7 +72,8 @@ func (s *service) Process(interfaces []string, filePath string) error {
 	}
 
 	funcMap := template.FuncMap{
-		"argNames": ArgNames,
+		"argNames":  ArgNames,
+		"retValues": ReturnValues,
 	}
 	templ := template.Must(template.New("mockFile").Funcs(funcMap).Parse(mockFileTemplate))
 	for intf, path := range pairs {
@@ -78,6 +81,26 @@ func (s *service) Process(interfaces []string, filePath string) error {
 		go s.mock(intf, path, templ, &wg)
 	}
 	wg.Wait()
+	return nil
+}
+
+func (s *service) ProcessOne(input io.Reader, output io.Writer) error {
+	var b strings.Builder
+	_, err := io.Copy(&b, input)
+	if err != nil {
+		log.Printf("error reading input: %s\n", err)
+		return err
+	}
+	raw := b.String()
+	intfs := s.findAllIn(raw)
+	if len(intfs) > 1 {
+		return ErrMoreThanOneInterface
+	}
+	log.Println("mocking interface:", intfs[0])
+	err = s.mocker.Mock(raw, output, intfs[0])
+	if err != nil {
+		log.Printf("failed to mock interface %s, err: %s\n", intfs[0], err)
+	}
 	return nil
 }
 
@@ -159,7 +182,7 @@ func (s *service) mock(name, path string, templ *template.Template, wg *sync.Wai
 		}
 		fn := mock.Func{
 			Name:    matches[1],
-			Args:    matches[2],
+			Args:    addNamesIfMissing(matches[2], hasNamedParams(method)),
 			RetArgs: matches[3],
 		}
 		mockStruct.Methods = append(mockStruct.Methods, fn)
@@ -183,6 +206,21 @@ func (s *service) mock(name, path string, templ *template.Template, wg *sync.Wai
 		log.Println("failed to format file:", err)
 		return
 	}
+}
+
+func (s *service) findAllIn(raw string) []string {
+	r := regexp.MustCompile(`type (\S+) interface`)
+	matches := r.FindAllStringSubmatch(raw, -1)
+	if matches == nil {
+		return nil
+	}
+	intfs := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if match[1] != "" {
+			intfs = append(intfs, match[1])
+		}
+	}
+	return intfs
 }
 
 func findMockFolder() string {
@@ -227,6 +265,10 @@ func findMockFolder() string {
 
 func toCamel(s string) string {
 	r := []rune(s)
+	if len(r) == 0 {
+		log.Println("empty rune array string:", s)
+		return ""
+	}
 	r[0] = unicode.ToLower(r[0])
 	return string(r)
 }
@@ -248,4 +290,35 @@ func ArgNames(f mock.Func) string {
 		names = append(names, argName)
 	}
 	return strings.Join(names, ", ")
+}
+
+func ReturnValues(f mock.Func) string {
+	ret := make([]string, 0)
+	for _, arg := range strings.Split(f.RetArgs, ", ") {
+		retType := strings.Trim(arg, "())")
+		var val string
+		switch retType {
+		case "error":
+			val = "nil"
+		case "int", "uint", "int16", "int32", "int64", "uint16", "uint32", "uint64":
+			val = "1"
+		case "float32", "float64":
+			val = "1.1"
+		case "string", "interface{}":
+			val = "\"\""
+		default:
+			val = retType + "{}"
+		}
+		switch {
+		case strings.Contains(retType, "[]"):
+			val = fmt.Sprintf("%s{}", retType)
+		case strings.Contains(retType, "*"):
+			val = strings.Replace(retType, "*", "&", 1)
+			if abbrev(val) != "" {
+				val += "{}"
+			}
+		}
+		ret = append(ret, val)
+	}
+	return strings.Join(ret, ", ")
 }

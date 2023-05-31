@@ -2,11 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"net"
 	"os"
 
 	"github.com/urfave/cli/v2"
 
+	"github.com/silvan-talos/mock/http"
 	"github.com/silvan-talos/mock/mocking"
 )
 
@@ -45,14 +48,21 @@ func main() {
 }
 
 func startMocker(cCtx *cli.Context) error {
-	filePath := cCtx.String("file")
-	interfaces := cCtx.StringSlice("interface")
-	if filePath == "" && interfaces == nil {
-		return ErrArgs
-	}
+	//filePath := cCtx.String("file")
+	//interfaces := cCtx.StringSlice("interface")
+	//if filePath == "" && interfaces == nil {
+	//	return ErrArgs
+	//}
 
-	mocker := mocking.NewService()
-	err := mocker.Process(interfaces, filePath)
+	mocker := mocking.NewMocker()
+	ms := mocking.NewService(mocker)
+	//err := ms.Process(interfaces, filePath)
+	server := http.NewServer(ms)
+	lis, err := net.Listen("tcp", "localhost:8080")
+	if err != nil {
+		return fmt.Errorf("failed to create listener: %w, address:%s", err, "localhost:8080")
+	}
+	err = server.Serve(lis)
 	if err != nil {
 		return err
 	}
