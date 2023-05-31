@@ -50,12 +50,11 @@ func startMocker(cCtx *cli.Context) error {
 	if filePath == "" && interfaces == nil {
 		return ErrArgs
 	}
-
-	mocker := mocking.NewService()
-	err := mocker.Process(interfaces, filePath)
+	mocker := mocking.NewMocker()
+	ms := mocking.NewService(mocker)
+	err := ms.Process(interfaces, filePath)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

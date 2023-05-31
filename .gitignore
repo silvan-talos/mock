@@ -16,3 +16,6 @@
 
 # executable
 mock
+
+# idea files
+.idea
