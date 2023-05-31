@@ -7,19 +7,15 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"text/template"
 	"unicode"
-
-	"github.com/silvan-talos/mock"
 )
 
 var (
-	ErrNotFound             = errors.New("no match between interface name and filepath found. Please add one manually")
+	ErrNotFound             = errors.New("interface not found")
 	ErrMoreThanOneInterface = errors.New("more than one interface found, only one at a time is supported")
 )
 
@@ -71,14 +67,9 @@ func (s *service) Process(interfaces []string, filePath string) error {
 		return ErrNotFound
 	}
 
-	funcMap := template.FuncMap{
-		"argNames":  ArgNames,
-		"retValues": ReturnValues,
-	}
-	templ := template.Must(template.New("mockFile").Funcs(funcMap).Parse(mockFileTemplate))
 	for intf, path := range pairs {
 		wg.Add(1)
-		go s.mock(intf, path, templ, &wg)
+		go s.mock(intf, path, &wg)
 	}
 	wg.Wait()
 	return nil
@@ -155,39 +146,12 @@ func (s *service) findAllAt(filePath string, pairs map[string]string) error {
 	return nil
 }
 
-func (s *service) mock(name, path string, templ *template.Template, wg *sync.WaitGroup) {
+func (s *service) mock(name, path string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	fileBytes, err := os.ReadFile(path)
 	if err != nil {
+		log.Println("failed to read file:", err)
 		return
-	}
-	pattern := fmt.Sprintf(`type %s interface {([\s\S]+?)\n}`, name)
-	r := regexp.MustCompile(pattern)
-	matches := r.FindStringSubmatch(string(fileBytes))
-	if matches == nil {
-		log.Printf("couldn't find interface %s at %s\n", name, path)
-		return
-	}
-	methods := strings.TrimSpace(matches[1])
-	mockStruct := mock.Structure{
-		Name:       name,
-		NameAbbrev: abbrev(name),
-	}
-	for _, method := range strings.Split(methods, "\n") {
-		r := regexp.MustCompile(`(\w+)\((.*?)\)\s(.*)`)
-		matches := r.FindStringSubmatch(strings.TrimSpace(method))
-		if matches == nil {
-			log.Println("couldn't find interface methods")
-			continue
-		}
-		fn := mock.Func{
-			Name:    matches[1],
-			Args:    addNamesIfMissing(matches[2], hasNamedParams(method)),
-			RetArgs: matches[3],
-		}
-		mockStruct.Methods = append(mockStruct.Methods, fn)
-
-		log.Println("Name:", matches[1], "ARGS:", matches[2], "rets:", matches[3])
 	}
 	mockDir := findMockFolder()
 	filePath := fmt.Sprintf("%s/%s.go", mockDir, toCamel(name))
@@ -196,14 +160,9 @@ func (s *service) mock(name, path string, templ *template.Template, wg *sync.Wai
 		log.Println("failed to create file:", err)
 		return
 	}
-	err = templ.Execute(file, mockStruct)
+	err = s.mocker.Mock(string(fileBytes), file, name)
 	if err != nil {
-		log.Println("failed to execute template:", err)
-		return
-	}
-	err = exec.Command("gofmt", "-w", filePath).Run()
-	if err != nil {
-		log.Println("failed to format file:", err)
+		log.Println("failed to create mock:", err)
 		return
 	}
 }
