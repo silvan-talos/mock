@@ -1,0 +1,12 @@
+package mock
+
+type CustomNamed struct {
+	CreateFn func(c Composer) error
+}
+
+func (cn *CustomNamed) Create(c Composer) error {
+	if cn.CreateFn != nil {
+		return cn.CreateFn(c)
+	}
+	return nil
+}

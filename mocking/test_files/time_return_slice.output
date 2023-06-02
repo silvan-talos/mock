@@ -1,0 +1,12 @@
+package mock
+
+type TimeSlice struct {
+	GetFn func(from, to time.Time) ([]Composer, error)
+}
+
+func (ts *TimeSlice) Get(from, to time.Time) ([]Composer, error) {
+	if ts.GetFn != nil {
+		return ts.GetFn(from, to)
+	}
+	return []Composer{}, nil
+}

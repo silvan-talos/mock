@@ -1,0 +1,3 @@
+type PredNamed interface {
+	Get(id int) (string, error)
+}

@@ -1,0 +1,12 @@
+package mock
+
+type PointerSlice struct {
+	GetAllInFn func(ids []int) ([]*Composer, error)
+}
+
+func (ps *PointerSlice) GetAllIn(ids []int) ([]*Composer, error) {
+	if ps.GetAllInFn != nil {
+		return ps.GetAllInFn(ids)
+	}
+	return []*Composer{}, nil
+}

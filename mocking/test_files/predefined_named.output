@@ -1,0 +1,12 @@
+package mock
+
+type PredNamed struct {
+	GetFn func(id int) (string, error)
+}
+
+func (pn *PredNamed) Get(id int) (string, error) {
+	if pn.GetFn != nil {
+		return pn.GetFn(id)
+	}
+	return "", nil
+}
