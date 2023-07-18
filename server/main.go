@@ -12,9 +12,9 @@ func main() {
 	mocker := mocking.NewMocker()
 	ms := mocking.NewService(mocker)
 	server := http.NewServer(ms)
-	lis, err := net.Listen("tcp", "localhost:8080")
+	lis, err := net.Listen("tcp", "localhost:6868")
 	if err != nil {
-		log.Fatalf("failed to create listener: %w, address:%s\n", err, "localhost:8080")
+		log.Fatalf("failed to create listener: %w, address:%s\n", err, "localhost:6868")
 	}
 	err = server.Serve(lis)
 	if err != nil {

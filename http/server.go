@@ -19,7 +19,8 @@ func NewServer(ms mocking.Service) Server {
 	s := Server{
 		ms: ms,
 	}
-	r := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
 	r.POST("/mock", s.mockInterface)
 	s.router = r
 	return s
