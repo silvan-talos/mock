@@ -4,7 +4,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/silvan-talos/mock/mocking"
@@ -21,6 +23,15 @@ func NewServer(ms mocking.Service) Server {
 	}
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:  []string{"http://localhost*"},
+		AllowMethods:  []string{"POST", "OPTIONS"},
+		AllowHeaders:  []string{"Origin"},
+		ExposeHeaders: []string{"Content-Length"},
+		MaxAge:        12 * time.Hour,
+		AllowWildcard: true,
+	}))
+
 	r.POST("/mock", s.mockInterface)
 	s.router = r
 	return s
